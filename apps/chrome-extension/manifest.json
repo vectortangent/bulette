@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Bulette Control",
+  "version": "0.1.0",
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "host_permissions": ["https://*.owlbear.rodeo/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "options_page": "options.html",
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.owlbear.rodeo/*"],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
