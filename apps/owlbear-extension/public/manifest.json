@@ -1,0 +1,11 @@
+{
+  "name": "Bulette Owlbear Bridge",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "icon": "https://OWNER.github.io/REPO/owlbear-extension/icon.png",
+  "action": {
+    "title": "Bulette",
+    "icon": "https://OWNER.github.io/REPO/owlbear-extension/icon.png",
+    "popover": "https://OWNER.github.io/REPO/owlbear-extension/index.html"
+  }
+}

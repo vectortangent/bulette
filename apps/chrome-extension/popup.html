@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <body>
+    <main>
+      <h1>Bulette</h1>
+      <textarea id="prompt" placeholder="Enter command"></textarea>
+      <input id="provider" placeholder="Provider URL" />
+      <input id="model" placeholder="Model" />
+      <button id="generate">Generate Plan</button>
+      <button id="send">Send to Owlbear</button>
+      <button id="apply">Apply Last Plan</button>
+      <pre id="dsl"></pre>
+      <pre id="errors"></pre>
+    </main>
+    <script type="module" src="/src/popup/main.ts"></script>
+  </body>
+</html>
