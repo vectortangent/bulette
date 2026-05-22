@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && cp manifest.json ../../dist/chrome-extension/manifest.json",
+    "build": "vite build && node -e \"require('node:fs').copyFileSync('manifest.json', '../../dist/chrome-extension/manifest.json')\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

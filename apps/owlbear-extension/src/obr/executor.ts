@@ -33,6 +33,30 @@ function canWrite(step: ObrSagaStep): boolean {
   return step.effect === "write" || step.effect === "broadcast";
 }
 
+function normalizeStep(step: ObrSagaStep): ObrSagaStep {
+  if (
+    (step.operation === "OBR.scene.items.updateItems" || step.operation === "OBR.scene.local.updateItems") &&
+    Array.isArray((step.args as Record<string, unknown> | undefined)?.items)
+  ) {
+    const args = step.args as Record<string, unknown>;
+    const items = args.items as Array<Record<string, unknown>>;
+    if (items.length === 1 && typeof items[0]?.id === "string") {
+      const { id, ...patch } = items[0];
+      const restArgs = Object.fromEntries(Object.entries(args).filter(([key]) => key !== "items"));
+      return {
+        ...step,
+        args: {
+          ...restArgs,
+          itemIds: [id],
+          patch
+        }
+      };
+    }
+  }
+
+  return step;
+}
+
 export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
   const validation = validateEnvelope(input);
   if (!validation.ok) {
@@ -59,7 +83,8 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
   const sceneItemIds = new Set((await OBR.scene.items.getItems()).map((item) => item.id));
   const dryRun = envelope.mode === "read" || envelope.mode === "plan";
 
-  for (const step of envelope.steps) {
+  for (const rawStep of envelope.steps) {
+    const step = normalizeStep(rawStep);
     if (step.guard?.requireSceneReady && !ready) {
       skippedStepIds.push(step.id);
       warnings.push(`${step.id}: scene not ready`);
@@ -133,13 +158,8 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
     }
 
     try {
-      const operation =
-        envelope.mode === "preview" && step.operation === "OBR.scene.items.updateItems"
-          ? "OBR.scene.local.updateItems"
-          : step.operation;
       const resolvedStep: ObrSagaStep = {
         ...step,
-        operation,
         args: resolveRefs(step.args, ctx)
       };
       const result = await dispatchObrStep(resolvedStep, ctx);

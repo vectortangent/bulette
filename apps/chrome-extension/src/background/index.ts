@@ -8,6 +8,7 @@ type ProviderConfig = {
 
 const CONFIG_KEY = "providerConfig";
 const LAST_PLAN_KEY = "lastPlan";
+const LAST_BOARD_STATE_KEY = "lastBoardState";
 
 async function getConfig(): Promise<ProviderConfig> {
   const data = await chrome.storage.local.get(CONFIG_KEY);
@@ -23,6 +24,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message?.type === "SET_CONFIG") {
       await chrome.storage.local.set({ [CONFIG_KEY]: message.config });
       sendResponse({ ok: true });
+      return;
+    }
+    if (message?.type === "SET_BOARD_STATE") {
+      await chrome.storage.local.set({ [LAST_BOARD_STATE_KEY]: message.boardState });
+      sendResponse({ ok: true });
+      return;
+    }
+    if (message?.type === "GET_BOARD_STATE") {
+      const data = await chrome.storage.local.get(LAST_BOARD_STATE_KEY);
+      sendResponse({ ok: true, boardState: data[LAST_BOARD_STATE_KEY] });
       return;
     }
     if (message?.type === "GENERATE_PLAN") {
