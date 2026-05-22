@@ -2,10 +2,10 @@
   "name": "Bulette Owlbear Bridge",
   "version": "0.1.0",
   "manifest_version": 1,
-  "icon": "https://vectortangent.github.io/bulette/owlbear-extension/icon.png",
+  "icon": "https://vectortangent.github.io/bulette/icon.png",
   "action": {
     "title": "Bulette",
-    "icon": "https://vectortangent.github.io/bulette/owlbear-extension/icon.png",
-    "popover": "https://vectortangent.github.io/bulette/owlbear-extension/index.html"
+    "icon": "https://vectortangent.github.io/bulette/icon.png",
+    "popover": "https://vectortangent.github.io/bulette/index.html"
   }
 }
