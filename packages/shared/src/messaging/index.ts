@@ -7,7 +7,9 @@ export const MessageType = {
   PLAN: "LLM_OBR_PLAN",
   PREVIEW: "LLM_OBR_PREVIEW",
   APPLY: "LLM_OBR_APPLY",
-  RESULT: "LLM_OBR_RESULT"
+  RESULT: "LLM_OBR_RESULT",
+  GENERATE_IMAGE_REQUEST: "LLM_OBR_GENERATE_IMAGE_REQUEST",
+  GENERATE_IMAGE_RESPONSE: "LLM_OBR_GENERATE_IMAGE_RESPONSE"
 } as const;
 
 export type BridgeMessageType = (typeof MessageType)[keyof typeof MessageType];

@@ -200,13 +200,13 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
       continue;
     }
 
-    if (!envelope.safety.allowSceneUpload && (step.operation === "OBR.assets.uploadImages" || step.operation === "OBR.assets.uploadScenes")) {
+    if (!envelope.safety.allowSceneUpload && (step.operation === "OBR.assets.uploadImages" || step.operation === "OBR.assets.uploadScenes" || step.operation === "OBR.assets.generateAndUploadImage")) {
       skippedStepIds.push(step.id);
       errors.push(`${step.id}: asset upload disabled by safety policy`);
       continue;
     }
 
-    if (!envelope.safety.allowAssetPicker && step.operation.startsWith("OBR.assets.")) {
+    if (!envelope.safety.allowAssetPicker && step.operation.startsWith("OBR.assets.") && step.operation !== "OBR.assets.generateAndUploadImage") {
       skippedStepIds.push(step.id);
       errors.push(`${step.id}: asset operations disabled by safety policy`);
       continue;

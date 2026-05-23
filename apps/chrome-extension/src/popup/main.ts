@@ -1,11 +1,17 @@
 import { MessageType, SCHEMA_VERSION, type BridgeMessage, type ObrDslEnvelope, validateEnvelope } from "@bulette/shared";
+import { createRoot } from "react-dom/client";
+import { createElement } from "react";
+import { BoardStateTree } from "./BoardStateTree";
 
 const promptInput = document.querySelector<HTMLTextAreaElement>("#prompt")!;
 const providerInput = document.querySelector<HTMLInputElement>("#provider")!;
 const modelInput = document.querySelector<HTMLInputElement>("#model")!;
 const boardStateOut = document.querySelector<HTMLElement>("#boardState")!;
+const boardStateTreeContainer = document.querySelector<HTMLElement>("#boardStateTree")!;
 const dslOut = document.querySelector<HTMLElement>("#dsl")!;
 const errorsOut = document.querySelector<HTMLElement>("#errors")!;
+
+const treeRoot = createRoot(boardStateTreeContainer);
 
 let lastPlan: ObrDslEnvelope | undefined;
 let lastBoardState: unknown;
@@ -60,6 +66,7 @@ function showBoardState(boardState: unknown): void {
   boardStateOut.textContent = state
     ? `Board state: ${state.sceneReady ? "ready" : "not ready"} | role: ${state.role ?? "unknown"} | grid: ${scale}, ${dpi} | items: ${itemCount}`
     : "Board state: unavailable";
+  treeRoot.render(createElement(BoardStateTree, { data: boardState }));
 }
 
 function summarizeBoardState(boardState: unknown): string {

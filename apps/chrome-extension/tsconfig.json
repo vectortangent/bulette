@@ -6,7 +6,8 @@
     "strict": true,
     "skipLibCheck": true,
     "lib": ["ES2022", "DOM"],
-    "types": ["chrome"]
+    "types": ["chrome"],
+    "jsx": "react-jsx"
   },
   "include": ["src"]
 }

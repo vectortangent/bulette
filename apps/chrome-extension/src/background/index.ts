@@ -86,6 +86,48 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       sendResponse({ ok: true, envelope: data[LAST_PLAN_KEY] as ObrDslEnvelope | undefined });
       return;
     }
+
+    if (message?.type === "GENERATE_IMAGE") {
+      const config = await getConfig();
+      if (!config.apiKey || !config.baseUrl) {
+        sendResponse({ ok: false, errors: ["Missing provider configuration"] });
+        return;
+      }
+
+      const imageBaseUrl = config.baseUrl.replace(/\/chat\/completions\/?$/, "/images/generations");
+      const payload: Record<string, unknown> = {
+        model: message.model || "dall-e-3",
+        prompt: message.prompt,
+        n: 1,
+        size: message.size || "1024x1024",
+        response_format: "b64_json"
+      };
+
+      const response = await fetch(imageBaseUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        sendResponse({ ok: false, errors: [`Image generation failed: ${response.status} ${errorText}`] });
+        return;
+      }
+
+      const result = await response.json();
+      const imageData = result?.data?.[0];
+      if (!imageData?.b64_json) {
+        sendResponse({ ok: false, errors: ["No image data returned from generation API"] });
+        return;
+      }
+
+      sendResponse({ ok: true, b64: imageData.b64_json, revisedPrompt: imageData.revised_prompt });
+      return;
+    }
   })().catch((error: unknown) => {
     sendResponse({ ok: false, errors: [String(error)] });
   });

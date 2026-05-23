@@ -111,7 +111,8 @@ export const OBR_OPERATIONS = [
   "OBR.interaction.startItemInteraction",
   "OBR.interaction.updateItemInteraction",
   "OBR.interaction.stopItemInteraction",
-  "OBR.interaction.animateItemAlongPath"
+  "OBR.interaction.animateItemAlongPath",
+  "OBR.assets.generateAndUploadImage"
 ] as const;
 
 export type ObrOperation = (typeof OBR_OPERATIONS)[number];

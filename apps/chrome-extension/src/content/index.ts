@@ -86,6 +86,24 @@ if (!window.__buletteContentScriptLoaded) {
     if (message.type === MessageType.STATE_RESPONSE || message.type === MessageType.RESULT) {
       sendRuntimeMessage({ type: "OBR_RESPONSE", message });
     }
+    if (message.type === MessageType.GENERATE_IMAGE_REQUEST) {
+      const payload = message.payload as { prompt?: string; model?: string; size?: string } | undefined;
+      chrome.runtime.sendMessage(
+        { type: "GENERATE_IMAGE", prompt: payload?.prompt, model: payload?.model, size: payload?.size },
+        (response) => {
+          const responseMessage: BridgeMessage = {
+            schemaVersion: SCHEMA_VERSION,
+            type: MessageType.GENERATE_IMAGE_RESPONSE,
+            requestId: message.requestId,
+            payload: response
+          };
+          for (const frame of document.querySelectorAll("iframe")) {
+            frame.contentWindow?.postMessage(responseMessage, "*");
+          }
+          window.postMessage(responseMessage, "*");
+        }
+      );
+    }
   });
 
   postToPage({ type: MessageType.CONNECT, schemaVersion: SCHEMA_VERSION, requestId: crypto.randomUUID() });

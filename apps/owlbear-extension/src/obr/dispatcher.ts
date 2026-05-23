@@ -1,6 +1,32 @@
-import OBR, { buildImage, buildText } from "@owlbear-rodeo/sdk";
+import OBR, { buildImage, buildImageUpload, buildText } from "@owlbear-rodeo/sdk";
 import type { ObrSagaStep } from "@bulette/shared";
+import { SCHEMA_VERSION, MessageType } from "@bulette/shared";
 import { applyItemPatch } from "./patch";
+
+function requestImageGeneration(prompt: string, model?: string, size?: string): Promise<{ ok: boolean; b64?: string; revisedPrompt?: string; errors?: string[] }> {
+  return new Promise((resolve) => {
+    const requestId = crypto.randomUUID();
+    const handler = (event: MessageEvent) => {
+      const msg = event.data;
+      if (!msg || msg.schemaVersion !== SCHEMA_VERSION) return;
+      if (msg.type !== MessageType.GENERATE_IMAGE_RESPONSE) return;
+      if (msg.requestId !== requestId) return;
+      window.removeEventListener("message", handler);
+      resolve(msg.payload ?? { ok: false, errors: ["No response payload"] });
+    };
+    window.addEventListener("message", handler);
+    window.parent.postMessage({
+      schemaVersion: SCHEMA_VERSION,
+      type: MessageType.GENERATE_IMAGE_REQUEST,
+      requestId,
+      payload: { prompt, model, size }
+    }, "*");
+    setTimeout(() => {
+      window.removeEventListener("message", handler);
+      resolve({ ok: false, errors: ["Image generation request timed out"] });
+    }, 60000);
+  });
+}
 
 type SimpleTextItem = {
   type?: string;
@@ -398,6 +424,59 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
 
         stop();
         return { animated: true, path: pathType, frames: points.length, duration };
+      }
+    case "OBR.assets.generateAndUploadImage":
+      {
+        const prompt = args.prompt as string;
+        if (!prompt) return { error: { code: "missingPrompt", message: "args.prompt is required" } };
+        const model = args.model as string | undefined;
+        const size = args.size as string | undefined;
+        const name = (args.name as string) ?? "Generated Image";
+        const typeHint = (args.typeHint as string) ?? "PROP";
+        const addToScene = (args.addToScene as boolean) ?? false;
+        const position = (args.position as { x: number; y: number }) ?? { x: 0, y: 0 };
+
+        const genResult = await requestImageGeneration(prompt, model, size);
+        if (!genResult.ok || !genResult.b64) {
+          return { error: { code: "imageGenerationFailed", message: genResult.errors?.join("; ") ?? "Image generation failed" } };
+        }
+
+        const binaryString = atob(genResult.b64);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "image/png" });
+        const file = new File([blob], `${name}.png`, { type: "image/png" });
+
+        const upload = buildImageUpload(file).name(name).build();
+        await obr.assets.uploadImages([upload], typeHint);
+
+        if (addToScene) {
+          const url = URL.createObjectURL(blob);
+          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = reject;
+            el.src = url;
+          });
+          const width = img.naturalWidth;
+          const height = img.naturalHeight;
+          URL.revokeObjectURL(url);
+
+          const gridDpi = await obr.scene.grid.getDpi();
+          const sceneItem = buildImage(
+            { width, height, url: URL.createObjectURL(blob), mime: "image/png" },
+            { dpi: gridDpi, offset: { x: 0, y: 0 } }
+          )
+            .name(name)
+            .position(position)
+            .layer(typeHint === "MAP" ? "MAP" : typeHint === "CHARACTER" ? "CHARACTER" : typeHint === "MOUNT" ? "MOUNT" : "PROP")
+            .build();
+          await obr.scene.items.addItems([sceneItem]);
+        }
+
+        return { generated: true, name, typeHint, addedToScene: addToScene, revisedPrompt: genResult.revisedPrompt };
       }
     default:
       return {
