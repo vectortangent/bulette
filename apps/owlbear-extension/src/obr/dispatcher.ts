@@ -322,6 +322,83 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
         delete ctx[ref];
         return { stopped: ref };
       }
+    case "OBR.interaction.animateItemAlongPath":
+      {
+        const itemId = args.itemId as string;
+        if (!itemId) return { error: { code: "missingItemId", message: "itemId is required" } };
+        const sceneItems = await obr.scene.items.getItems();
+        const item = sceneItems.find((i: { id: string }) => i.id === itemId);
+        if (!item) return { error: { code: "itemNotFound", message: `Item ${itemId} not found` } };
+
+        const pathType = (args.path as string) ?? "circle";
+        const duration = Math.min((args.duration as number) ?? 2000, 28000);
+        const frameCount = Math.min(Math.max((args.frameCount as number) ?? 36, 4), 360);
+        const rawRadius = (args.radius as number) ?? undefined;
+        const rawRadiusFt = (args.radiusFt as number) ?? undefined;
+        const returnToStart = (args.returnToStart as boolean) ?? true;
+
+        let radius: number;
+        if (rawRadius != null) {
+          radius = rawRadius;
+        } else if (rawRadiusFt != null) {
+          const gridDpi = await obr.scene.grid.getDpi();
+          const gridScale = await obr.scene.grid.getScale();
+          radius = rawRadiusFt / gridScale.parsed.multiplier * gridDpi;
+        } else {
+          const gridDpi = await obr.scene.grid.getDpi();
+          radius = gridDpi;
+        }
+
+        const startPos = { x: item.position.x, y: item.position.y };
+
+        let points: Array<{ x: number; y: number }>;
+        if (pathType === "circle") {
+          const cx = (args.center as { x: number; y: number })?.x ?? startPos.x;
+          const cy = (args.center as { x: number; y: number })?.y ?? (startPos.y - radius);
+          points = [];
+          for (let i = 0; i <= frameCount; i++) {
+            const angle = Math.PI / 2 + (2 * Math.PI * i) / frameCount;
+            points.push({
+              x: cx + radius * Math.cos(angle),
+              y: cy + radius * Math.sin(angle)
+            });
+          }
+        } else if (pathType === "waypoints" && Array.isArray(args.waypoints)) {
+          points = args.waypoints as Array<{ x: number; y: number }>;
+        } else {
+          return { error: { code: "invalidPath", message: `Unsupported path type: ${pathType}` } };
+        }
+
+        if (points.length < 2) return { error: { code: "invalidPath", message: "Path must have at least 2 points" } };
+
+        const manager = await obr.interaction.startItemInteraction(item);
+        const [update, stop] = manager;
+        const frameDelay = duration / points.length;
+
+        for (const point of points) {
+          update((draft: any) => {
+            if (Array.isArray(draft)) {
+              draft[0].position = point;
+            } else {
+              draft.position = point;
+            }
+          });
+          await new Promise(resolve => setTimeout(resolve, frameDelay));
+        }
+
+        if (returnToStart) {
+          update((draft: any) => {
+            if (Array.isArray(draft)) {
+              draft[0].position = startPos;
+            } else {
+              draft.position = startPos;
+            }
+          });
+        }
+
+        stop();
+        return { animated: true, path: pathType, frames: points.length, duration };
+      }
     default:
       return {
         error: {
