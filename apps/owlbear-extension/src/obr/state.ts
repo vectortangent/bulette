@@ -16,16 +16,24 @@ export async function extractBoardState() {
     sceneReady: ready,
     role,
     grid: { scale: gridScale, type: gridType, measurement: gridMeasurement, dpi: gridDpi },
-    items: items.map((item) => ({
-      id: item.id,
-      name: item.name,
-      layer: item.layer,
-      position: item.position,
-      rotation: item.rotation,
-      scale: item.scale,
-      visible: item.visible,
-      locked: item.locked,
-      metadata: item.metadata?.[COMBAT_META_KEY]
-    }))
+    items: items.map((item) => {
+      const base = {
+        id: item.id,
+        type: item.type,
+        name: item.name,
+        layer: item.layer,
+        position: item.position,
+        rotation: item.rotation,
+        scale: item.scale,
+        visible: item.visible,
+        locked: item.locked,
+        metadata: item.metadata?.[COMBAT_META_KEY]
+      };
+      const img = (item as { image?: { url?: string; width?: number; height?: number } }).image;
+      if (img?.url) {
+        return { ...base, image: { url: img.url, width: img.width, height: img.height } };
+      }
+      return base;
+    })
   };
 }

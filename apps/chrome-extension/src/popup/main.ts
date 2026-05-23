@@ -270,7 +270,7 @@ document.querySelector("#send")?.addEventListener("click", async () => {
   showEnvelope(lastPlan);
   try {
     const requestId = crypto.randomUUID();
-    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 8000);
+    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 35000);
     const request = await sendToActiveTab({ type: "SEND_PLAN", requestId, envelope: { ...lastPlan, mode: "preview" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
     if (!request?.ok) {
       pendingResult.catch(() => undefined);
@@ -305,7 +305,7 @@ document.querySelector("#apply")?.addEventListener("click", async () => {
   showEnvelope(lastPlan);
   try {
     const requestId = crypto.randomUUID();
-    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 8000);
+    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 35000);
     const request = await sendToActiveTab({ type: "APPLY_PLAN", requestId, envelope: { ...lastPlan, mode: "apply" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
     if (!request?.ok) {
       pendingResult.catch(() => undefined);

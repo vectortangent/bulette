@@ -97,6 +97,7 @@ export function buildObrSystemPrompt(boardStateSummary: string): string {
     "Set safety.allowModalControl true for OBR.modal.open/close.",
     "Set safety.allowPopoverControl true for OBR.popover.open/close/setWidth/setHeight.",
     "Set safety.allowInteractionControl true for OBR.interaction.* operations.",
+    "Owlbear Rodeo interactions expire after 30 seconds. Keep all interaction durations under 28 seconds to stay within this limit. For animateItemAlongPath, never set duration above 28000. For longer animations, chain multiple animateItemAlongPath steps sequentially, each under 28 seconds, picking up where the previous one ended (set returnToStart to false except on the final step).",
     "To animate a token along a path (e.g. move in a circle), use OBR.interaction.animateItemAlongPath with effect \"interaction\". Args: itemId (required), path (\"circle\" or \"waypoints\"), radius (pixels) or radiusFt (grid units), duration (ms, default 2000, max 28000), frameCount (default 36), center ({x,y} for circle center, defaults to above item), waypoints ([{x,y}] for custom paths), returnToStart (boolean, default true). Example for circular motion: {\"itemId\":\"abc\",\"path\":\"circle\",\"radiusFt\":10,\"duration\":3000}. This starts an interaction, animates position updates along the path, and stops the interaction automatically.",
     "Valid effects are read, write, subscribe, ui, broadcast, interaction.",
     "Never output AddToken, MoveToken, Plan, or any other invented operation names.",
