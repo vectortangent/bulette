@@ -1,6 +1,37 @@
-import OBR from "@owlbear-rodeo/sdk";
+import OBR, { buildImage, buildText } from "@owlbear-rodeo/sdk";
 import type { ObrSagaStep } from "@bulette/shared";
 import { applyItemPatch } from "./patch";
+
+type SimpleTextItem = {
+  type?: string;
+  text?: string;
+  name?: string;
+  position?: { x?: number; y?: number };
+  layer?: string;
+  fontSize?: number;
+  color?: string;
+  alignment?: string;
+};
+
+function normalizeAddItem(item: unknown): unknown {
+  const simple = item as SimpleTextItem;
+  if (simple?.type?.toLowerCase() !== "text" || typeof simple.text !== "string") {
+    return item;
+  }
+
+  const align = simple.alignment?.toUpperCase() === "CENTER" ? "CENTER" : simple.alignment?.toUpperCase() === "RIGHT" ? "RIGHT" : "LEFT";
+  return buildText()
+    .name(simple.name ?? "Text")
+    .plainText(simple.text)
+    .textType("PLAIN")
+    .fontSize(simple.fontSize ?? 24)
+    .fillColor(simple.color ?? "#000000")
+    .textAlign(align)
+    .textAlignVertical("MIDDLE")
+    .layer("TEXT")
+    .position({ x: simple.position?.x ?? 0, y: simple.position?.y ?? 0 })
+    .build();
+}
 
 export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unknown>): Promise<unknown> {
   const args = (step.args ?? {}) as Record<string, unknown>;
@@ -16,7 +47,7 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
     case "OBR.scene.items.getItems":
       return obr.scene.items.getItems();
     case "OBR.scene.items.addItems":
-      return obr.scene.items.addItems((args.items as unknown[]) ?? []);
+      return obr.scene.items.addItems(((args.items as unknown[]) ?? []).map(normalizeAddItem));
     case "OBR.scene.items.deleteItems":
       return obr.scene.items.deleteItems((args.itemIds as string[]) ?? []);
     case "OBR.scene.items.updateItems":
@@ -24,7 +55,7 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
         for (const item of items) applyItemPatch(item, (args.patch as Record<string, unknown>) ?? {});
       });
     case "OBR.scene.local.addItems":
-      return obr.scene.local.addItems((args.items as unknown[]) ?? []);
+      return obr.scene.local.addItems(((args.items as unknown[]) ?? []).map(normalizeAddItem));
     case "OBR.scene.local.deleteItems":
       return obr.scene.local.deleteItems((args.itemIds as string[]) ?? []);
     case "OBR.scene.local.updateItems":
@@ -133,6 +164,27 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
       return obr.scene.fog.getFilled();
     case "OBR.scene.fog.setFilled":
       return obr.scene.fog.setFilled(args.filled);
+    case "OBR.assets.downloadImages":
+      {
+        const images = await obr.assets.downloadImages(args.multiple, args.defaultSearch, args.typeHint);
+        if (args.addToScene && images[0]) {
+          const image = images[0];
+          const position = (args.position as { x?: number; y?: number } | undefined) ?? { x: 0, y: 0 };
+          const item = buildImage(image.image, image.grid)
+            .name(String(args.name ?? image.name))
+            .text(image.text)
+            .textItemType(image.textItemType)
+            .visible(image.visible)
+            .locked(image.locked)
+            .rotation(image.rotation)
+            .scale(image.scale)
+            .layer("CHARACTER")
+            .position({ x: position.x ?? 0, y: position.y ?? 0 })
+            .build();
+          await obr.scene.items.addItems([item]);
+        }
+        return images;
+      }
     default:
       return {
         error: {

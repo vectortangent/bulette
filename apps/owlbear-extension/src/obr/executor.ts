@@ -33,7 +33,12 @@ function canWrite(step: ObrSagaStep): boolean {
   return step.effect === "write" || step.effect === "broadcast";
 }
 
-function normalizeStep(step: ObrSagaStep): ObrSagaStep {
+type GridContext = {
+  dpi: number;
+  scaleMultiplier: number;
+};
+
+function normalizeStep(step: ObrSagaStep, grid?: GridContext): ObrSagaStep {
   if (
     (step.operation === "OBR.scene.items.updateItems" || step.operation === "OBR.scene.local.updateItems") &&
     Array.isArray((step.args as Record<string, unknown> | undefined)?.items)
@@ -54,7 +59,65 @@ function normalizeStep(step: ObrSagaStep): ObrSagaStep {
     }
   }
 
+  if (
+    step.operation === "OBR.scene.items.updateItems" &&
+    grid &&
+    typeof (step.args as Record<string, unknown> | undefined)?.moveByDistance === "number" &&
+    typeof (step.args as Record<string, unknown> | undefined)?.direction === "string"
+  ) {
+    const args = step.args as Record<string, unknown>;
+    const distance = args.moveByDistance as number;
+    const direction = String(args.direction).toLowerCase();
+    const pixels = distance / grid.scaleMultiplier * grid.dpi;
+    const delta =
+      direction === "right" ? { x: pixels, y: 0 } :
+      direction === "left" ? { x: -pixels, y: 0 } :
+      direction === "down" ? { x: 0, y: pixels } :
+      direction === "up" ? { x: 0, y: -pixels } :
+      undefined;
+
+    if (delta) {
+      const patch = (args.patch as Record<string, unknown> | undefined) ?? {};
+      return {
+        ...step,
+        args: {
+          ...args,
+          patch: {
+            ...patch,
+            delta,
+            moveBy: true
+          }
+        }
+      };
+    }
+  }
+
   return step;
+}
+
+function validateExecutableStep(step: ObrSagaStep): string | undefined {
+  const args = (step.args ?? {}) as Record<string, unknown>;
+  if (
+    (step.operation === "OBR.scene.items.updateItems" || step.operation === "OBR.scene.local.updateItems") &&
+    !args.patch
+  ) {
+    return `${step.id}: updateItems requires args.patch after normalization`;
+  }
+  return undefined;
+}
+
+function formatError(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 }
 
 export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
@@ -79,12 +142,18 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
   const errors: string[] = [];
 
   const role = envelope.actor.role ?? (await OBR.player.getRole());
-  const ready = await OBR.scene.isReady();
-  const sceneItemIds = new Set((await OBR.scene.items.getItems()).map((item) => item.id));
+  const [ready, sceneItems, gridDpi, gridScale] = await Promise.all([
+    OBR.scene.isReady(),
+    OBR.scene.items.getItems(),
+    OBR.scene.grid.getDpi(),
+    OBR.scene.grid.getScale()
+  ]);
+  const grid = { dpi: gridDpi, scaleMultiplier: gridScale.parsed.multiplier };
+  const sceneItemIds = new Set(sceneItems.map((item) => item.id));
   const dryRun = envelope.mode === "read" || envelope.mode === "plan";
 
   for (const rawStep of envelope.steps) {
-    const step = normalizeStep(rawStep);
+    const step = normalizeStep(rawStep, grid);
     if (step.guard?.requireSceneReady && !ready) {
       skippedStepIds.push(step.id);
       warnings.push(`${step.id}: scene not ready`);
@@ -157,6 +226,13 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
       continue;
     }
 
+    const executableError = validateExecutableStep(step);
+    if (executableError) {
+      skippedStepIds.push(step.id);
+      errors.push(executableError);
+      continue;
+    }
+
     try {
       const resolvedStep: ObrSagaStep = {
         ...step,
@@ -169,7 +245,7 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
       if (step.saveAs) ctx[step.saveAs] = result;
       executedStepIds.push(step.id);
     } catch (error) {
-      errors.push(`${step.id}: ${String(error)}`);
+      errors.push(`${step.id}: ${formatError(error)}`);
       for (const compensating of [...envelope.steps].reverse()) {
         if (compensating.id === step.id) continue;
         if (compensating.compensate?.type === "custom") {

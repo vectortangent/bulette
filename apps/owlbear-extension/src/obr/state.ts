@@ -2,19 +2,20 @@ import OBR from "@owlbear-rodeo/sdk";
 import { COMBAT_META_KEY } from "./constants";
 
 export async function extractBoardState() {
-  const [ready, items, role, gridScale, gridType, gridMeasurement] = await Promise.all([
+  const [ready, items, role, gridScale, gridType, gridMeasurement, gridDpi] = await Promise.all([
     OBR.scene.isReady(),
     OBR.scene.items.getItems(),
     OBR.player.getRole(),
     OBR.scene.grid.getScale(),
     OBR.scene.grid.getType(),
-    OBR.scene.grid.getMeasurement()
+    OBR.scene.grid.getMeasurement(),
+    OBR.scene.grid.getDpi()
   ]);
 
   return {
     sceneReady: ready,
     role,
-    grid: { scale: gridScale, type: gridType, measurement: gridMeasurement },
+    grid: { scale: gridScale, type: gridType, measurement: gridMeasurement, dpi: gridDpi },
     items: items.map((item) => ({
       id: item.id,
       name: item.name,

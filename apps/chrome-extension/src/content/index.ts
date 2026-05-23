@@ -42,6 +42,14 @@ function postToPage(message: BridgeMessage): number {
   return frameCount;
 }
 
+function sendRuntimeMessage(message: unknown): void {
+  try {
+    chrome.runtime.sendMessage(message);
+  } catch {
+    // The extension was reloaded while this content script was still attached.
+  }
+}
+
 if (!window.__buletteContentScriptLoaded) {
   window.__buletteContentScriptLoaded = true;
 
@@ -76,7 +84,7 @@ if (!window.__buletteContentScriptLoaded) {
       return;
     }
     if (message.type === MessageType.STATE_RESPONSE || message.type === MessageType.RESULT) {
-      chrome.runtime.sendMessage({ type: "OBR_RESPONSE", message });
+      sendRuntimeMessage({ type: "OBR_RESPONSE", message });
     }
   });
 

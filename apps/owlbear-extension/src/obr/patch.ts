@@ -23,6 +23,15 @@ export function applyItemPatch(item: Record<string, unknown>, patch: SafePatch):
     throw new Error("unsafePatchKeys");
   }
 
+  if (patch.moveBy === true && patch.delta && typeof patch.delta === "object") {
+    const current = (item.position as { x?: number; y?: number } | undefined) ?? {};
+    const delta = patch.delta as { x?: number; y?: number };
+    item.position = {
+      x: (current.x ?? 0) + (delta.x ?? 0),
+      y: (current.y ?? 0) + (delta.y ?? 0)
+    };
+  }
+
   for (const [key, value] of Object.entries(patch)) {
     if (!ALLOWED_ITEM_KEYS.has(key)) continue;
 

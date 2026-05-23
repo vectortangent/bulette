@@ -10,6 +10,8 @@ const errorsOut = document.querySelector<HTMLElement>("#errors")!;
 let lastPlan: ObrDslEnvelope | undefined;
 let lastBoardState: unknown;
 
+const DEFAULT_GRID_DPI = 150;
+
 type BoardStateItem = {
   id?: string;
   name?: string;
@@ -23,7 +25,18 @@ type BoardStateItem = {
 type BoardState = {
   sceneReady?: boolean;
   role?: string;
-  grid?: unknown;
+  grid?: {
+    dpi?: number;
+    scale?: {
+      raw?: string;
+      parsed?: {
+        multiplier?: number;
+        unit?: string;
+      };
+    };
+    type?: string;
+    measurement?: string;
+  };
   items?: BoardStateItem[];
 };
 
@@ -35,11 +48,17 @@ function showErrors(errors: string[]): void {
   errorsOut.textContent = errors.join("\n");
 }
 
+function showStatus(message: string): void {
+  errorsOut.textContent = message;
+}
+
 function showBoardState(boardState: unknown): void {
   const state = boardState as BoardState | undefined;
   const itemCount = state?.items?.length ?? 0;
+  const scale = state?.grid?.scale?.raw ?? "unknown scale";
+  const dpi = state?.grid?.dpi ? `${state.grid.dpi}px` : `${DEFAULT_GRID_DPI}px assumed`;
   boardStateOut.textContent = state
-    ? `Board state: ${state.sceneReady ? "ready" : "not ready"} | role: ${state.role ?? "unknown"} | items: ${itemCount}`
+    ? `Board state: ${state.sceneReady ? "ready" : "not ready"} | role: ${state.role ?? "unknown"} | grid: ${scale}, ${dpi} | items: ${itemCount}`
     : "Board state: unavailable";
 }
 
@@ -66,6 +85,64 @@ function summarizeBoardState(boardState: unknown): string {
     itemCount: state.items?.length ?? 0,
     items
   });
+}
+
+function normalizePlanWithBoardState(envelope: ObrDslEnvelope, boardState: unknown): ObrDslEnvelope {
+  const state = boardState as BoardState | undefined;
+  const dpi = state?.grid?.dpi ?? DEFAULT_GRID_DPI;
+  const multiplier = state?.grid?.scale?.parsed?.multiplier;
+  if (!multiplier) {
+    return envelope;
+  }
+
+  return {
+    ...envelope,
+    steps: envelope.steps.map((step) => {
+      if (step.operation !== "OBR.scene.items.updateItems" && step.operation !== "OBR.scene.local.updateItems") {
+        return step;
+      }
+
+      const args = (step.args ?? {}) as Record<string, unknown>;
+      const itemIds = args.itemIds as string[] | undefined;
+      const itemId = itemIds?.[0];
+      const distance = args.moveByDistance;
+      const direction = typeof args.direction === "string" ? args.direction.toLowerCase() : undefined;
+      const item = state?.items?.find((entry) => entry.id === itemId);
+      if (!itemId || typeof distance !== "number" || !direction || !item?.position) {
+        return step;
+      }
+
+      const pixels = distance / multiplier * dpi;
+      const delta =
+        direction === "right" ? { x: pixels, y: 0 } :
+        direction === "left" ? { x: -pixels, y: 0 } :
+        direction === "down" ? { x: 0, y: pixels } :
+        direction === "up" ? { x: 0, y: -pixels } :
+        undefined;
+      if (!delta) {
+        return step;
+      }
+
+      const patch = (args.patch as Record<string, unknown> | undefined) ?? {};
+      const normalizedArgs = Object.fromEntries(
+        Object.entries(args).filter(([key]) => key !== "moveByDistance" && key !== "direction")
+      );
+
+      return {
+        ...step,
+        args: {
+          ...normalizedArgs,
+          patch: {
+            ...patch,
+            position: {
+              x: (item.position.x ?? 0) + delta.x,
+              y: (item.position.y ?? 0) + delta.y
+            }
+          }
+        }
+      };
+    })
+  };
 }
 
 async function getActiveTabId(): Promise<number | undefined> {
@@ -175,7 +252,7 @@ document.querySelector("#generate")?.addEventListener("click", async () => {
     return;
   }
 
-  lastPlan = validation.data;
+  lastPlan = normalizePlanWithBoardState(validation.data, boardState);
   showEnvelope(lastPlan);
   showErrors([]);
 });
@@ -189,16 +266,25 @@ document.querySelector("#send")?.addEventListener("click", async () => {
     showErrors(["No generated plan to send"]);
     return;
   }
+  lastPlan = normalizePlanWithBoardState(lastPlan, lastBoardState);
+  showEnvelope(lastPlan);
   try {
-    const response = await sendToActiveTab({ type: "SEND_PLAN", envelope: { ...lastPlan, mode: "preview" } }) as { ok?: boolean; errors?: string[]; frameCount?: number };
-    if (!response?.ok) {
-      showErrors(response?.errors ?? ["Failed to send plan to Owlbear"]);
+    const requestId = crypto.randomUUID();
+    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 8000);
+    const request = await sendToActiveTab({ type: "SEND_PLAN", requestId, envelope: { ...lastPlan, mode: "preview" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
+    if (!request?.ok) {
+      pendingResult.catch(() => undefined);
+      showErrors(request?.errors ?? ["Failed to send plan to Owlbear"]);
       return;
     }
-    if (response.frameCount === 0) {
-      showErrors(["Sent to the Owlbear page, but no extension iframe was found. Open the Bulette Owlbear extension popover, then try again."]);
+    if (request.frameCount === 0) {
+      pendingResult.catch(() => undefined);
+      showErrors(["Sent to the Owlbear page, but no extension iframe was found. Open the Bulette Owlbear popover, then try again."]);
       return;
     }
+    const result = await pendingResult;
+    showStatus(JSON.stringify(result.payload, null, 2));
+    return;
   } catch (error) {
     showErrors([`${String(error)}. Make sure the active tab is an Owlbear room and reload the tab after reloading the Chrome extension.`]);
     return;
@@ -215,16 +301,25 @@ document.querySelector("#apply")?.addEventListener("click", async () => {
     showErrors(["No generated plan to apply"]);
     return;
   }
+  lastPlan = normalizePlanWithBoardState(lastPlan, lastBoardState);
+  showEnvelope(lastPlan);
   try {
-    const response = await sendToActiveTab({ type: "APPLY_PLAN", envelope: { ...lastPlan, mode: "apply" } }) as { ok?: boolean; errors?: string[]; frameCount?: number };
-    if (!response?.ok) {
-      showErrors(response?.errors ?? ["Failed to apply plan in Owlbear"]);
+    const requestId = crypto.randomUUID();
+    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 8000);
+    const request = await sendToActiveTab({ type: "APPLY_PLAN", requestId, envelope: { ...lastPlan, mode: "apply" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
+    if (!request?.ok) {
+      pendingResult.catch(() => undefined);
+      showErrors(request?.errors ?? ["Failed to apply plan in Owlbear"]);
       return;
     }
-    if (response.frameCount === 0) {
-      showErrors(["Sent to the Owlbear page, but no extension iframe was found. Open the Bulette Owlbear extension popover, then try again."]);
+    if (request.frameCount === 0) {
+      pendingResult.catch(() => undefined);
+      showErrors(["Sent to the Owlbear page, but no extension iframe was found. Open the Bulette Owlbear popover, then try again."]);
       return;
     }
+    const result = await pendingResult;
+    showStatus(JSON.stringify(result.payload, null, 2));
+    return;
   } catch (error) {
     showErrors([`${String(error)}. Make sure the active tab is an Owlbear room and reload the tab after reloading the Chrome extension.`]);
     return;
