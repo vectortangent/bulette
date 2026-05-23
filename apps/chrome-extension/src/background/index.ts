@@ -106,11 +106,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       const imageBaseUrl = config.baseUrl.replace(/\/chat\/completions\/?$/, "/images/generations");
       const payload: Record<string, unknown> = {
-        model: message.model || "dall-e-3",
+        model: message.model || "gpt-image-1",
         prompt: message.prompt,
         n: 1,
         size: message.size || "1024x1024",
-        response_format: "b64_json"
+        output_format: "png"
       };
 
       const response = await fetch(imageBaseUrl, {

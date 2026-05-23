@@ -1,4 +1,4 @@
-import OBR, { buildImage, buildImageUpload, buildText } from "@owlbear-rodeo/sdk";
+import OBR, { buildImage, buildText } from "@owlbear-rodeo/sdk";
 import type { ObrSagaStep } from "@bulette/shared";
 import { SCHEMA_VERSION, MessageType } from "@bulette/shared";
 import { applyItemPatch } from "./patch";
@@ -441,32 +441,23 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
           return { error: { code: "imageGenerationFailed", message: genResult.errors?.join("; ") ?? "Image generation failed" } };
         }
 
-        const binaryString = atob(genResult.b64);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: "image/png" });
-        const file = new File([blob], `${name}.png`, { type: "image/png" });
-
-        const upload = buildImageUpload(file).name(name).build();
-        await obr.assets.uploadImages([upload], typeHint);
+        // Use a data URL — self-contained, no network required, works across OBR contexts
+        const dataUrl = `data:image/png;base64,${genResult.b64}`;
 
         if (addToScene) {
-          const url = URL.createObjectURL(blob);
+          // Load image to get natural dimensions
           const img = await new Promise<HTMLImageElement>((resolve, reject) => {
             const el = new Image();
             el.onload = () => resolve(el);
             el.onerror = reject;
-            el.src = url;
+            el.src = dataUrl;
           });
           const width = img.naturalWidth;
           const height = img.naturalHeight;
-          URL.revokeObjectURL(url);
 
           const gridDpi = await obr.scene.grid.getDpi();
           const sceneItem = buildImage(
-            { width, height, url: URL.createObjectURL(blob), mime: "image/png" },
+            { width, height, url: dataUrl, mime: "image/png" },
             { dpi: gridDpi, offset: { x: 0, y: 0 } }
           )
             .name(name)

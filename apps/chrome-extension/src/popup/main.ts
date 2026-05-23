@@ -293,7 +293,7 @@ document.querySelector("#send")?.addEventListener("click", async () => {
   try {
     showProgress("Executing plan (may include image generation)…");
     const requestId = crypto.randomUUID();
-    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 35000);
+    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 120000);
     const request = await sendToActiveTab({ type: "SEND_PLAN", requestId, envelope: { ...lastPlan, mode: "preview" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
     if (!request?.ok) {
       hideProgress();
@@ -333,7 +333,7 @@ document.querySelector("#apply")?.addEventListener("click", async () => {
   try {
     showProgress("Applying plan (may include image generation)…");
     const requestId = crypto.randomUUID();
-    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 35000);
+    const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 120000);
     const request = await sendToActiveTab({ type: "APPLY_PLAN", requestId, envelope: { ...lastPlan, mode: "apply" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
     if (!request?.ok) {
       hideProgress();
