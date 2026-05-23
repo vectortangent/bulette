@@ -53,4 +53,35 @@ describe("envelopeSchema", () => {
     };
     expect(envelopeSchema.safeParse(envelope).success).toBe(false);
   });
+
+  it("accepts guarded viewport and tool operations", () => {
+    const envelope = {
+      version: "obr-dsl/v1",
+      sagaId: "expanded-api",
+      mode: "preview",
+      actor: { role: "GM" },
+      safety: {
+        requireGmForWrites: true,
+        requireConfirmation: true,
+        allowNetworkBroadcast: false,
+        allowAssetPicker: false,
+        allowSceneUpload: false,
+        allowViewportControl: true,
+        allowToolControl: true
+      },
+      steps: [
+        {
+          id: "viewport-width",
+          operation: "OBR.viewport.getWidth",
+          effect: "read"
+        },
+        {
+          id: "active-tool",
+          operation: "OBR.tool.getActiveTool",
+          effect: "read"
+        }
+      ]
+    };
+    expect(envelopeSchema.safeParse(envelope).success).toBe(true);
+  });
 });

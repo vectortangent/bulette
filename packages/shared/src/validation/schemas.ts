@@ -51,6 +51,11 @@ export const envelopeSchema = z.object({
     allowAssetPicker: z.boolean(),
     allowSceneUpload: z.boolean(),
     allowViewportControl: z.boolean(),
+    allowRoomMetadata: z.boolean().optional(),
+    allowToolControl: z.boolean().optional(),
+    allowModalControl: z.boolean().optional(),
+    allowPopoverControl: z.boolean().optional(),
+    allowInteractionControl: z.boolean().optional(),
     maxItemsAffected: z.number().int().positive().optional()
   }),
   steps: z.array(sagaStepSchema).min(1)

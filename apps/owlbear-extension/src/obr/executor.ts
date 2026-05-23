@@ -33,6 +33,28 @@ function canWrite(step: ObrSagaStep): boolean {
   return step.effect === "write" || step.effect === "broadcast";
 }
 
+function isViewportControl(step: ObrSagaStep): boolean {
+  return [
+    "OBR.viewport.reset",
+    "OBR.viewport.animateTo",
+    "OBR.viewport.animateToBounds",
+    "OBR.viewport.setPosition",
+    "OBR.viewport.setScale"
+  ].includes(step.operation);
+}
+
+function isToolControl(step: ObrSagaStep): boolean {
+  return step.operation.startsWith("OBR.tool.") && !["OBR.tool.getActiveTool", "OBR.tool.getMetadata", "OBR.tool.getActiveToolMode"].includes(step.operation);
+}
+
+function isModalControl(step: ObrSagaStep): boolean {
+  return step.operation === "OBR.modal.open" || step.operation === "OBR.modal.close";
+}
+
+function isPopoverControl(step: ObrSagaStep): boolean {
+  return ["OBR.popover.open", "OBR.popover.close", "OBR.popover.setWidth", "OBR.popover.setHeight"].includes(step.operation);
+}
+
 type GridContext = {
   dpi: number;
   scaleMultiplier: number;
@@ -190,20 +212,53 @@ export async function executeObrSaga(input: unknown): Promise<ExecutionReport> {
       continue;
     }
 
-    if (!envelope.safety.allowViewportControl && (step.operation === "OBR.viewport.setPosition" || step.operation === "OBR.viewport.setScale")) {
+    if (!envelope.safety.allowViewportControl && isViewportControl(step)) {
       skippedStepIds.push(step.id);
       errors.push(`${step.id}: viewport control disabled by safety policy`);
       continue;
     }
 
-    if (step.operation === "OBR.room.setMetadata") {
+    if (!envelope.safety.allowRoomMetadata && step.operation === "OBR.room.setMetadata") {
       skippedStepIds.push(step.id);
       errors.push(`${step.id}: room metadata writes disabled by safety policy`);
       continue;
     }
 
+    if (!envelope.safety.allowToolControl && isToolControl(step)) {
+      skippedStepIds.push(step.id);
+      errors.push(`${step.id}: tool control disabled by safety policy`);
+      continue;
+    }
+
+    if (!envelope.safety.allowModalControl && isModalControl(step)) {
+      skippedStepIds.push(step.id);
+      errors.push(`${step.id}: modal control disabled by safety policy`);
+      continue;
+    }
+
+    if (!envelope.safety.allowPopoverControl && isPopoverControl(step)) {
+      skippedStepIds.push(step.id);
+      errors.push(`${step.id}: popover control disabled by safety policy`);
+      continue;
+    }
+
+    if (!envelope.safety.allowInteractionControl && step.operation.startsWith("OBR.interaction.")) {
+      skippedStepIds.push(step.id);
+      errors.push(`${step.id}: interaction control disabled by safety policy`);
+      continue;
+    }
+
     if (envelope.safety.maxItemsAffected && Array.isArray((step.args as Record<string, unknown>)?.itemIds)) {
       const count = ((step.args as Record<string, unknown>).itemIds as unknown[]).length;
+      if (count > envelope.safety.maxItemsAffected) {
+        skippedStepIds.push(step.id);
+        errors.push(`${step.id}: item count ${count} exceeds maxItemsAffected`);
+        continue;
+      }
+    }
+
+    if (envelope.safety.maxItemsAffected && Array.isArray((step.args as Record<string, unknown>)?.items)) {
+      const count = ((step.args as Record<string, unknown>).items as unknown[]).length;
       if (count > envelope.safety.maxItemsAffected) {
         skippedStepIds.push(step.id);
         errors.push(`${step.id}: item count ${count} exceeds maxItemsAffected`);
