@@ -154,6 +154,7 @@ export function buildObrSystemPrompt(boardStateSummary: string): string {
     "For example, if scale is 5 ft and dpi is 150, then 15 ft is 15 / 5 * 150 = 450 pixels.",
     "For a square grid, right means +x, left means -x, down means +y, and up means -y.",
     "To add plain text, use OBR.scene.items.addItems with args.items containing simple objects like {\"type\":\"text\",\"text\":\"hello\",\"position\":{\"x\":0,\"y\":0},\"layer\":\"TEXT\",\"fontSize\":24,\"color\":\"#000000\",\"alignment\":\"center\"}; the executor will build valid Owlbear text items.",
+    "To pause between steps in a sequence, add a step with operation OBR.notification.show, effect ui, and args {\"waitMs\":1000}. This waits without showing a notification when message is omitted.",
     "Valid effects are read, write, subscribe, ui, broadcast, interaction.",
     "Never output AddToken, MoveToken, Plan, or any other invented operation names.",
     "Never output JavaScript. Never use eval.",

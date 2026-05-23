@@ -121,6 +121,10 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
     case "OBR.broadcast.sendMessage":
       return obr.broadcast.sendMessage(args.channel, args.message);
     case "OBR.notification.show":
+      if (typeof args.waitMs === "number") {
+        await new Promise((resolve) => window.setTimeout(resolve, Math.max(0, args.waitMs as number)));
+        return { waitedMs: Math.max(0, args.waitMs as number) };
+      }
       return obr.notification.show(String(args.message ?? ""), args.variant ?? "INFO");
     case "OBR.action.open":
       return obr.action.open();
