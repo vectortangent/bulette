@@ -66,6 +66,35 @@ function getInteractionManager(ctx: Record<string, unknown>, ref: unknown): [((u
     : undefined;
 }
 
+const IMAGE_DB_NAME = "bulette-images";
+const IMAGE_STORE_NAME = "generated";
+
+function openImageDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IMAGE_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      req.result.createObjectStore(IMAGE_STORE_NAME, { keyPath: "key" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function persistImageToIndexedDB(name: string, b64: string): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const db = await openImageDB();
+      const tx = db.transaction(IMAGE_STORE_NAME, "readwrite");
+      const store = tx.objectStore(IMAGE_STORE_NAME);
+      store.put({ key: name, b64, createdAt: Date.now() });
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onerror = () => { db.close(); reject(tx.error); };
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
 export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unknown>): Promise<unknown> {
   const args = (step.args ?? {}) as Record<string, unknown>;
   const obr = OBR as unknown as Record<string, any>;
@@ -441,8 +470,21 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
           return { error: { code: "imageGenerationFailed", message: genResult.errors?.join("; ") ?? "Image generation failed" } };
         }
 
-        // Use a data URL — self-contained, no network required, works across OBR contexts
-        const dataUrl = `data:image/png;base64,${genResult.b64}`;
+        // Convert base64 to Blob and create a short blob: URL (avoids OBR's 2048 char URL limit)
+        const byteString = atob(genResult.b64);
+        const bytes = new Uint8Array(byteString.length);
+        for (let i = 0; i < byteString.length; i++) {
+          bytes[i] = byteString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "image/png" });
+        const blobUrl = URL.createObjectURL(blob);
+
+        // Persist in IndexedDB so the blob can be recreated after page reload
+        try {
+          await persistImageToIndexedDB(name, genResult.b64);
+        } catch {
+          // Non-fatal: image will still work for this session via blob URL
+        }
 
         if (addToScene) {
           // Load image to get natural dimensions
@@ -450,14 +492,14 @@ export async function dispatchObrStep(step: ObrSagaStep, ctx: Record<string, unk
             const el = new Image();
             el.onload = () => resolve(el);
             el.onerror = reject;
-            el.src = dataUrl;
+            el.src = blobUrl;
           });
           const width = img.naturalWidth;
           const height = img.naturalHeight;
 
           const gridDpi = await obr.scene.grid.getDpi();
           const sceneItem = buildImage(
-            { width, height, url: dataUrl, mime: "image/png" },
+            { width, height, url: blobUrl, mime: "image/png" },
             { dpi: gridDpi, offset: { x: 0, y: 0 } }
           )
             .name(name)
