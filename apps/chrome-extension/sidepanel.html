@@ -22,6 +22,18 @@
       .tree-url { color: #1a0dab; text-decoration: underline; font-size: 11px; }
       .tree-empty { color: #999; font-style: italic; padding: 8px; }
       .tree-leaf, .tree-branch { white-space: nowrap; }
+
+      .progress { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+      .progress.hidden { display: none; }
+      .progress-spinner {
+        width: 16px; height: 16px;
+        border: 2px solid #ddd;
+        border-top-color: #4a90d9;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      .progress-text { font-size: 13px; color: #555; }
+      @keyframes spin { to { transform: rotate(360deg); } }
     </style>
   </head>
   <body>
@@ -34,6 +46,10 @@
       <button id="generate">Generate Plan</button>
       <button id="send">Send to Owlbear</button>
       <button id="apply">Apply Last Plan</button>
+      <div id="progress" class="progress hidden">
+        <div class="progress-spinner"></div>
+        <span class="progress-text"></span>
+      </div>
       <pre id="boardState"></pre>
       <div id="boardStateTree"></div>
       <pre id="dsl"></pre>

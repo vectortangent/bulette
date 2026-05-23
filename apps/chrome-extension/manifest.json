@@ -2,10 +2,11 @@
   "manifest_version": 3,
   "name": "Bulette Control",
   "version": "0.1.0",
-  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "permissions": ["storage", "tabs", "scripting", "activeTab", "sidePanel"],
   "host_permissions": ["https://*.owlbear.rodeo/*"],
-  "action": {
-    "default_popup": "popup.html"
+  "action": {},
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "options_page": "options.html",
   "background": {

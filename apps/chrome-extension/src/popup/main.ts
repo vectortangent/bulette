@@ -10,8 +10,20 @@ const boardStateOut = document.querySelector<HTMLElement>("#boardState")!;
 const boardStateTreeContainer = document.querySelector<HTMLElement>("#boardStateTree")!;
 const dslOut = document.querySelector<HTMLElement>("#dsl")!;
 const errorsOut = document.querySelector<HTMLElement>("#errors")!;
+const progressEl = document.querySelector<HTMLElement>("#progress")!;
+const progressText = progressEl.querySelector<HTMLElement>(".progress-text")!;
 
 const treeRoot = createRoot(boardStateTreeContainer);
+
+function showProgress(message: string): void {
+  progressText.textContent = message;
+  progressEl.classList.remove("hidden");
+}
+
+function hideProgress(): void {
+  progressEl.classList.add("hidden");
+  progressText.textContent = "";
+}
 
 let lastPlan: ObrDslEnvelope | undefined;
 let lastBoardState: unknown;
@@ -232,6 +244,7 @@ document.querySelector("#refreshState")?.addEventListener("click", async () => {
 document.querySelector("#generate")?.addEventListener("click", async () => {
   let boardState = lastBoardState;
   try {
+    showProgress("Refreshing board state…");
     boardState = await refreshBoardState();
   } catch {
     const cached = await chrome.runtime.sendMessage({ type: "GET_BOARD_STATE" });
@@ -239,6 +252,7 @@ document.querySelector("#generate")?.addEventListener("click", async () => {
     showBoardState(boardState);
   }
 
+  showProgress("Generating plan…");
   const response = await chrome.runtime.sendMessage({
     type: "GENERATE_PLAN",
     prompt: promptInput.value,
@@ -246,6 +260,7 @@ document.querySelector("#generate")?.addEventListener("click", async () => {
     model: modelInput.value,
     boardStateSummary: summarizeBoardState(boardState)
   });
+  hideProgress();
 
   if (!response.ok) {
     showErrors(response.errors ?? ["Generation failed"]);
@@ -276,23 +291,28 @@ document.querySelector("#send")?.addEventListener("click", async () => {
   lastPlan = normalizePlanWithBoardState(lastPlan, lastBoardState);
   showEnvelope(lastPlan);
   try {
+    showProgress("Executing plan (may include image generation)…");
     const requestId = crypto.randomUUID();
     const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 35000);
     const request = await sendToActiveTab({ type: "SEND_PLAN", requestId, envelope: { ...lastPlan, mode: "preview" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
     if (!request?.ok) {
+      hideProgress();
       pendingResult.catch(() => undefined);
       showErrors(request?.errors ?? ["Failed to send plan to Owlbear"]);
       return;
     }
     if (request.frameCount === 0) {
+      hideProgress();
       pendingResult.catch(() => undefined);
       showErrors(["Sent to the Owlbear page, but no extension iframe was found. Open the Bulette Owlbear popover, then try again."]);
       return;
     }
     const result = await pendingResult;
+    hideProgress();
     showStatus(JSON.stringify(result.payload, null, 2));
     return;
   } catch (error) {
+    hideProgress();
     showErrors([`${String(error)}. Make sure the active tab is an Owlbear room and reload the tab after reloading the Chrome extension.`]);
     return;
   }
@@ -311,27 +331,42 @@ document.querySelector("#apply")?.addEventListener("click", async () => {
   lastPlan = normalizePlanWithBoardState(lastPlan, lastBoardState);
   showEnvelope(lastPlan);
   try {
+    showProgress("Applying plan (may include image generation)…");
     const requestId = crypto.randomUUID();
     const pendingResult = waitForBridgeResponse(requestId, MessageType.RESULT, 35000);
     const request = await sendToActiveTab({ type: "APPLY_PLAN", requestId, envelope: { ...lastPlan, mode: "apply" } }) as { ok?: boolean; errors?: string[]; requestId?: string; frameCount?: number };
     if (!request?.ok) {
+      hideProgress();
       pendingResult.catch(() => undefined);
       showErrors(request?.errors ?? ["Failed to apply plan in Owlbear"]);
       return;
     }
     if (request.frameCount === 0) {
+      hideProgress();
       pendingResult.catch(() => undefined);
       showErrors(["Sent to the Owlbear page, but no extension iframe was found. Open the Bulette Owlbear popover, then try again."]);
       return;
     }
     const result = await pendingResult;
+    hideProgress();
     showStatus(JSON.stringify(result.payload, null, 2));
     return;
   } catch (error) {
+    hideProgress();
     showErrors([`${String(error)}. Make sure the active tab is an Owlbear room and reload the tab after reloading the Chrome extension.`]);
     return;
   }
   showErrors([]);
+});
+
+// Listen for progress updates from background (e.g. image generation)
+chrome.runtime.onMessage.addListener((message) => {
+  if (message?.type === "PROGRESS") {
+    showProgress(message.text ?? "Working…");
+  }
+  if (message?.type === "PROGRESS_DONE") {
+    hideProgress();
+  }
 });
 
 chrome.runtime.sendMessage({ type: "GET_CONFIG" }).then((response) => {

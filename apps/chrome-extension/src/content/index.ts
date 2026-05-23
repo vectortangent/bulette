@@ -1,4 +1,24 @@
-import { SCHEMA_VERSION, MessageType, type BridgeMessage } from "@bulette/shared";
+// Content scripts cannot use ES module imports — constants must be inlined.
+// Keep in sync with @bulette/shared messaging/index.ts
+const SCHEMA_VERSION = "obr-bridge/v1";
+
+const MessageType = {
+  CONNECT: "LLM_OBR_CONNECT",
+  STATE_REQUEST: "LLM_OBR_STATE_REQUEST",
+  STATE_RESPONSE: "LLM_OBR_STATE_RESPONSE",
+  PREVIEW: "LLM_OBR_PREVIEW",
+  APPLY: "LLM_OBR_APPLY",
+  RESULT: "LLM_OBR_RESULT",
+  GENERATE_IMAGE_REQUEST: "LLM_OBR_GENERATE_IMAGE_REQUEST",
+  GENERATE_IMAGE_RESPONSE: "LLM_OBR_GENERATE_IMAGE_RESPONSE"
+} as const;
+
+type BridgeMessage<T = unknown> = {
+  schemaVersion: typeof SCHEMA_VERSION;
+  type: (typeof MessageType)[keyof typeof MessageType];
+  requestId: string;
+  payload?: T;
+};
 
 declare global {
   interface Window {

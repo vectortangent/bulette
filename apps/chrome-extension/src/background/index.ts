@@ -15,6 +15,13 @@ async function getConfig(): Promise<ProviderConfig> {
   return (data[CONFIG_KEY] as ProviderConfig) ?? {};
 }
 
+// Open side panel when extension icon is clicked
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.id) {
+    chrome.sidePanel.open({ tabId: tab.id });
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   (async () => {
     if (message?.type === "GET_CONFIG") {
@@ -94,6 +101,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
 
+      // Notify side panel that image generation has started
+      chrome.runtime.sendMessage({ type: "PROGRESS", text: "Generating image…" }).catch(() => {});
+
       const imageBaseUrl = config.baseUrl.replace(/\/chat\/completions\/?$/, "/images/generations");
       const payload: Record<string, unknown> = {
         model: message.model || "dall-e-3",
@@ -114,6 +124,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       if (!response.ok) {
         const errorText = await response.text();
+        chrome.runtime.sendMessage({ type: "PROGRESS_DONE" }).catch(() => {});
         sendResponse({ ok: false, errors: [`Image generation failed: ${response.status} ${errorText}`] });
         return;
       }
@@ -121,10 +132,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const result = await response.json();
       const imageData = result?.data?.[0];
       if (!imageData?.b64_json) {
+        chrome.runtime.sendMessage({ type: "PROGRESS_DONE" }).catch(() => {});
         sendResponse({ ok: false, errors: ["No image data returned from generation API"] });
         return;
       }
 
+      chrome.runtime.sendMessage({ type: "PROGRESS", text: "Uploading image to Owlbear…" }).catch(() => {});
       sendResponse({ ok: true, b64: imageData.b64_json, revisedPrompt: imageData.revised_prompt });
       return;
     }
